@@ -3,6 +3,7 @@ use mysql;
 use mysql::{Pool, PooledConn};
 use mysql::prelude::Queryable;
 use rocket::serde::{Deserialize, Serialize};
+
 use crate::server::AuthorizationToken;
 
 const URL: &str = "mysql://root:root@localhost:3306/core";
@@ -29,7 +30,6 @@ pub struct UserData {
     pub name: String,
     pub power: i32,
 }
-
 
 pub async fn get_user_from_token(authorization: AuthorizationToken) -> Option<UserData> {
     let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
