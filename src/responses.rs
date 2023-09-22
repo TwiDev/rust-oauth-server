@@ -2,6 +2,6 @@ use serde::{Serialize};
 
 #[derive(Serialize)]
 pub struct DefaultGenericResponse {
-    pub status: String,
-    pub message: String
+    pub message: String,
+    pub code: u32
 }
