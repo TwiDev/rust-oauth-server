@@ -6,7 +6,10 @@ use rocket::serde::json::Json;
 
 use crate::responses::DefaultGenericResponse;
 
-pub struct AuthorizationToken(String);
+pub struct AuthorizationToken {
+    pub _type: AuthorizationType,
+    pub token: String
+}
 
 #[derive(Debug)]
 pub enum AuthorizationError {
@@ -14,7 +17,14 @@ pub enum AuthorizationError {
     Invalid,
 }
 
-#[rocket::async_trait]
+#[derive(Debug)]
+pub enum AuthorizationType {
+    Bearer,
+    Bot
+}
+
+
+#[async_trait]
 impl<'r> FromRequest<'r> for AuthorizationToken {
     type Error = AuthorizationError;
 
@@ -22,8 +32,10 @@ impl<'r> FromRequest<'r> for AuthorizationToken {
         let token = request.headers().get_one("authorization");
         match token {
             Some(token) => {
-                // check validity
-                Outcome::Success(AuthorizationToken(token.to_string()))
+                // TODO: check validity
+                let _type:AuthorizationType = AuthorizationType::Bearer;
+
+                Outcome::Success(AuthorizationToken{_type, token: token.to_string()})
             }
             None => Outcome::Failure((Status::Unauthorized, AuthorizationError::Missing)),
         }
@@ -50,7 +62,7 @@ pub async fn token_application() -> Result<Json<DefaultGenericResponse>,Status> 
 #[get("/oauth/secret")]
 pub async fn secret_application(authorization: AuthorizationToken) -> Result<Json<DefaultGenericResponse>,Status> {
     return Ok(Json(DefaultGenericResponse{
-        message:authorization.0,
+        message:"Authorized!".to_string(),
         code:1
     }))
 }
