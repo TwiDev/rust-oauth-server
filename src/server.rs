@@ -1,9 +1,12 @@
+use std::str::FromStr;
+use std::string::ToString;
 use rocket::*;
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::http::{Header, Status};
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use rocket::serde::json::Json;
+use serde::de::Unexpected::Str;
 
 use crate::responses::DefaultGenericResponse;
 
@@ -12,16 +15,52 @@ pub struct AuthorizationToken {
     pub token: String
 }
 
+pub struct TokenProps {
+    pub token:AuthorizationToken,
+    pub authorization: Authorization,
+    pub associated_id: i64
+}
+
 #[derive(Debug)]
 pub enum AuthorizationError {
     Missing,
     Invalid,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AuthorizationType {
+    User,
     Bearer,
     Bot
+}
+
+pub enum Authorization {
+    User,
+    Guild,
+    Other
+}
+
+impl ToString for Authorization {
+    fn to_string(&self) -> String {
+        match self {
+            Authorization::User => String::from("USER"),
+            Authorization::Guild => String::from("GUILD"),
+            Authorization::Other => String::from("OTHER")
+        }
+    }
+}
+
+impl FromStr for Authorization {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "USER" => Ok(Authorization::User),
+            "GUILD" => Ok(Authorization::Guild),
+            "OTHER" => Ok(Authorization::Other),
+            _ => Err(())
+        }
+    }
 }
 
 #[async_trait]
