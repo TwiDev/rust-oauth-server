@@ -1,24 +1,26 @@
-use std::future::Future;
 use std::str::FromStr;
 use std::string::ToString;
+use rocket::{async_trait, catch, get, Request, request, Response};
 
-use rocket::*;
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::form::validate::Contains;
 use rocket::http::{Header, Status};
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use rocket::serde::json::Json;
-use serde::de::Unexpected::Str;
-use crate::database;
+use serde::{Serialize, Deserialize};
 
+use crate::database;
 use crate::responses::DefaultGenericResponse;
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct AuthorizationToken {
     pub _type: AuthorizationType,
     pub token: String
 }
 
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct TokenProps {
     pub token:AuthorizationToken,
     pub authorization: Authorization,
@@ -32,14 +34,14 @@ pub enum AuthorizationError {
     Invalid,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq,Eq, Serialize, Deserialize)]
 pub enum AuthorizationType {
     User,
     Bearer,
     Bot,
     Unknown
 }
-
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Authorization {
     User,
     Guild,
@@ -60,15 +62,15 @@ impl ToString for AuthorizationType {
 impl AuthorizationType {
 
     fn from_token(token: String) -> AuthorizationType {
-        if token.starts_with(AuthorizationType::Bearer.to_string()) {
-            AuthorizationType::Bearer
+        if token.contains(AuthorizationType::Bearer.to_string().as_str()) {
+            return AuthorizationType::Bearer
         }
 
-        if token.starts_with(AuthorizationType::Bot.to_string()) {
-            AuthorizationType::Bot
+        if token.contains(AuthorizationType::Bot.to_string().as_str()) {
+            return AuthorizationType::Bot
         }
 
-        AuthorizationType::User
+        return AuthorizationType::User
     }
 
 }
@@ -108,10 +110,10 @@ impl<'r> FromRequest<'r> for TokenProps {
                 let raw_token = token.to_string();
                 let _type:AuthorizationType = AuthorizationType::from_token(raw_token);
 
-                let props: Option<TokenProps> = database::verify_token(AuthorizationToken{
+                let props:Option<TokenProps> = database::verify_token(AuthorizationToken{
                     _type,
                     token: token.to_string(),
-                });
+                }).await;
 
                 if props.is_some() {
                     Outcome::Success(props.unwrap())
@@ -161,7 +163,7 @@ pub async fn token_application() -> Result<Json<DefaultGenericResponse>,Status> 
 }
 
 #[get("/oauth/secret")]
-pub async fn secret_application(authorization: AuthorizationToken) -> Result<Json<DefaultGenericResponse>,Status> {
+pub async fn secret_application(authorization: TokenProps) -> Result<Json<DefaultGenericResponse>,Status> {
     return Ok(Json(DefaultGenericResponse{
         message:"Authorized!".to_string(),
         code:1

@@ -1,10 +1,9 @@
 use std::arch::asm;
 use std::cell::OnceCell;
-use std::mem::discriminant;
 use std::str::FromStr;
 use mysql;
-use mysql::{Pool, PooledConn};
-use mysql::prelude::Queryable;
+use mysql::{FromRowError, Pool, PooledConn, Row};
+use mysql::prelude::{FromRow, Queryable};
 use rocket::serde::{Deserialize, Serialize};
 
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
@@ -42,38 +41,47 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
             AuthorizationType::User => {
                 let _query: String = format!("SELECT id,scopes FROM users WHERE token = {}", auth.token);
 
-                _conn.query_map(_query, |(id,scopes)| {
+                _conn.query_map(_query, |(id, scopes):(i64,u64)| {
                     TokenProps {
-                        token: auth,
+                        token: AuthorizationToken{
+                            _type: auth._type,
+                            token: auth.token.clone()
+                        },
                         authorization:Authorization::User,
                         associated_id: id,
-                        scopes
+                        scopes,
                     }
                 }).unwrap().pop()
             }
             AuthorizationType::Bearer => {
-                let _query: String = format!("SELECT id,authorization_type,scopes FROM tokens WHERE accessToken = {}", auth.token);
+                let _query: String = format!("SELECT id,scopes,authorization_type FROM tokens WHERE accessToken = {}", auth.token);
 
-                _conn.query_map(_query, |(id,scopes,authorization_type)| {
+                _conn.query_map(_query, |(id, scopes, authorization_type):(i64,u64,String)| {
                     TokenProps {
-                        token:auth,
-                        authorization: Authorization::from_str(authorization_type).unwrap(),
+                        token: AuthorizationToken{
+                            _type: auth._type,
+                            token: auth.token.clone()
+                        },
+                        authorization: Authorization::from_str(authorization_type.as_str()).unwrap(),
                         associated_id: id,
-                        scopes
+                        scopes,
                     }
                 }).unwrap().pop()
             }
             AuthorizationType::Bot => {
                 let _query: String = format!("SELECT id,scopes FROM bots WHERE token = {}", auth.token);
 
-                _conn.query_map(_query, |(id,scopes)| {
+                _conn.query_map(_query, |(id, scopes)| {
                     TokenProps {
-                        token:auth,
+                        token: AuthorizationToken{
+                            _type: auth._type,
+                            token: auth.token.clone()
+                        },
                         authorization: Authorization::User,
                         associated_id: id,
                         scopes
                     }
-                }).unwrap().pops()
+                }).unwrap().pop()
             }
             _ => {
                 None
