@@ -1,12 +1,16 @@
+use std::future::Future;
 use std::str::FromStr;
 use std::string::ToString;
+
 use rocket::*;
 use rocket::fairing::{Fairing, Info, Kind};
+use rocket::form::validate::Contains;
 use rocket::http::{Header, Status};
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use rocket::serde::json::Json;
 use serde::de::Unexpected::Str;
+use crate::database;
 
 use crate::responses::DefaultGenericResponse;
 
@@ -31,13 +35,41 @@ pub enum AuthorizationError {
 pub enum AuthorizationType {
     User,
     Bearer,
-    Bot
+    Bot,
+    Unknown
 }
 
 pub enum Authorization {
     User,
     Guild,
     Other
+}
+
+impl ToString for AuthorizationType {
+    fn to_string(&self) -> String {
+        match self {
+            AuthorizationType::User => String::from(""),
+            AuthorizationType::Bearer => String::from("Bearer"),
+            AuthorizationType::Bot => String::from("Bot"),
+            AuthorizationType::Unknown => String::from("Unknown")
+        }
+    }
+}
+
+impl AuthorizationType {
+
+    fn from_token(token: String) -> AuthorizationType {
+        if token.starts_with(AuthorizationType::Bearer.to_string()) {
+            AuthorizationType::Bearer
+        }
+
+        if token.starts_with(AuthorizationType::Bot.to_string()) {
+            AuthorizationType::Bot
+        }
+
+        AuthorizationType::User
+    }
+
 }
 
 impl ToString for Authorization {
@@ -64,17 +96,27 @@ impl FromStr for Authorization {
 }
 
 #[async_trait]
-impl<'r> FromRequest<'r> for AuthorizationToken {
+impl<'r> FromRequest<'r> for TokenProps {
     type Error = AuthorizationError;
 
     async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
         let token = request.headers().get_one("authorization");
         match token {
             Some(token) => {
-                // TODO: check validity
-                let _type:AuthorizationType = AuthorizationType::Bearer;
+                // Check token validity
+                let raw_token = token.to_string();
+                let _type:AuthorizationType = AuthorizationType::from_token(raw_token);
 
-                Outcome::Success(AuthorizationToken{_type, token: token.to_string()})
+                let props: Option<TokenProps> = database::verify_token(AuthorizationToken{
+                    _type,
+                    token: token.to_string(),
+                });
+
+                if props.is_some() {
+                    Outcome::Success(props.unwrap())
+                }else{
+                    Outcome::Failure((Status::Unauthorized, AuthorizationError::Invalid))
+                }
             }
             None => Outcome::Failure((Status::Unauthorized, AuthorizationError::Missing)),
         }

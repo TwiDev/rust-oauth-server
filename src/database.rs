@@ -69,7 +69,10 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
                         authorization: Authorization::User,
                         associated_id: id
                     }
-                }).unwrap().pop()
+                }).unwrap().pops()
+            }
+            _ => {
+                None
             }
         }
     }
