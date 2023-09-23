@@ -1,14 +1,16 @@
-use std::arch::asm;
 use std::cell::OnceCell;
 use std::str::FromStr;
+
 use mysql;
-use mysql::{FromRowError, Pool, PooledConn, Row};
-use mysql::prelude::{FromRow, Queryable};
+use mysql::{Pool, PooledConn};
+use mysql::prelude::Queryable;
+use rocket::http::Status;
 use rocket::serde::{Deserialize, Serialize};
 
+use crate::responses::UserDataResponse;
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
 
-const URL: &str = "mysql://root:root@localhost:3306/core";
+const URL: &str = "mysql://root:root@localhost:3306/oauth";
 static mut DB_POOL: OnceCell<Pool> = OnceCell::new();
 static DATABASE_CLIENT: DatabaseClient = DatabaseClient {};
 
@@ -39,9 +41,9 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
 
         match auth._type {
             AuthorizationType::User => {
-                let _query: String = format!("SELECT id,scopes FROM users WHERE token = {}", auth.token);
+                let _query: String = format!("SELECT id FROM users WHERE token = {}", auth.token);
 
-                _conn.query_map(_query, |(id, scopes):(i64,u64)| {
+                _conn.query_map(_query, |(id):(i64)| {
                     TokenProps {
                         token: AuthorizationToken{
                             _type: auth._type,
@@ -49,20 +51,21 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
                         },
                         authorization:Authorization::User,
                         associated_id: id,
-                        scopes,
+                        scopes:10
                     }
                 }).unwrap().pop()
             }
             AuthorizationType::Bearer => {
-                let _query: String = format!("SELECT id,scopes,authorization_type FROM tokens WHERE accessToken = {}", auth.token);
+                let _query: String = format!("SELECT id,scopes,authorization_tye FROM tokens WHERE accessToken = '{}'", auth.token);
 
-                _conn.query_map(_query, |(id, scopes, authorization_type):(i64,u64,String)| {
+                println!("{}", _query);
+                _conn.query_map::<(i64, i64, String), _, _, TokenProps>(_query, |(id, scopes, authorization_tye)| {
                     TokenProps {
                         token: AuthorizationToken{
                             _type: auth._type,
                             token: auth.token.clone()
                         },
-                        authorization: Authorization::from_str(authorization_type.as_str()).unwrap(),
+                        authorization: Authorization::User,
                         associated_id: id,
                         scopes,
                     }
@@ -90,8 +93,36 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
     }
 }
 
-pub async fn get_user_by_id(token: TokenProps, id: i64) {
 
+pub async fn get_user_by_id(auth: TokenProps, id: i64) -> Result<UserDataResponse, Status> {
+    if auth.scopes < 2 {
+        return Err(Status::Unauthorized);
+    }
+
+    return if auth.associated_id == id {
+        unsafe {
+            let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+            let _query: String = format!("SELECT id,email,name,power FROM users WHERE id = {}", id);
+
+            let data: Option<UserDataResponse> = _conn.query_map(_query, |(id, email, name, power)| {
+                UserDataResponse {
+                    id,
+                    email,
+                    global_name: name,
+                    power,
+                    flags: 0
+                }
+            }).unwrap().pop();
+
+            if data.is_some() {
+                Ok(data.unwrap())
+            } else {
+                Err(Status::NotFound)
+            }
+        }
+    } else {
+        Err(Status::Unauthorized)
+    }
 }
 
 pub unsafe fn initialize() {

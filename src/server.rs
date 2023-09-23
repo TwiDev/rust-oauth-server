@@ -11,7 +11,8 @@ use rocket::serde::json::Json;
 use serde::{Serialize, Deserialize};
 
 use crate::database;
-use crate::responses::DefaultGenericResponse;
+use crate::database::UserData;
+use crate::responses::{DefaultGenericResponse, UserDataResponse};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct AuthorizationToken {
@@ -25,7 +26,7 @@ pub struct TokenProps {
     pub token:AuthorizationToken,
     pub authorization: Authorization,
     pub associated_id: i64,
-    pub scopes: u64
+    pub scopes: i64
 }
 
 #[derive(Debug)]
@@ -48,13 +49,13 @@ pub enum Authorization {
     Other
 }
 
-impl ToString for AuthorizationType {
-    fn to_string(&self) -> String {
+impl AuthorizationType {
+    fn as_str(&self) -> &str {
         match self {
-            AuthorizationType::User => String::from(""),
-            AuthorizationType::Bearer => String::from("Bearer"),
-            AuthorizationType::Bot => String::from("Bot"),
-            AuthorizationType::Unknown => String::from("Unknown")
+            AuthorizationType::User => "",
+            AuthorizationType::Bearer => "Bearer",
+            AuthorizationType::Bot => "Bot",
+            AuthorizationType::Unknown => "Unknown"
         }
     }
 }
@@ -62,11 +63,11 @@ impl ToString for AuthorizationType {
 impl AuthorizationType {
 
     fn from_token(token: String) -> AuthorizationType {
-        if token.contains(AuthorizationType::Bearer.to_string().as_str()) {
+        if token.contains(AuthorizationType::Bearer.as_str()) {
             return AuthorizationType::Bearer
         }
 
-        if token.contains(AuthorizationType::Bot.to_string().as_str()) {
+        if token.contains(AuthorizationType::Bot.as_str()) {
             return AuthorizationType::Bot
         }
 
@@ -168,6 +169,17 @@ pub async fn secret_application(authorization: TokenProps) -> Result<Json<Defaul
         message:"Authorized!".to_string(),
         code:1
     }))
+}
+
+#[get("/api/users/<id>")]
+pub async fn users_handler(authorization: TokenProps, id: i64) -> Result<Json<UserDataResponse>,Status> {
+    let data:Result<UserDataResponse, Status> = database::get_user_by_id(authorization,id).await;
+
+    return if data.is_ok() {
+        Ok(Json(data.unwrap()))
+    }else{
+        Err(data.unwrap_err())
+    }
 }
 
 #[catch(401)]
