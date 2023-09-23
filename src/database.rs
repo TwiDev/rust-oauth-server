@@ -94,34 +94,34 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
 }
 
 
-pub async fn get_user_by_id(auth: TokenProps, id: i64) -> Result<UserDataResponse, Status> {
+pub async fn get_user_by_id(auth: TokenProps, id: i64, private: bool) -> Result<UserDataResponse, Status> {
     if auth.scopes < 2 {
         return Err(Status::Unauthorized);
     }
 
-    return if auth.associated_id == id {
-        unsafe {
-            let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-            let _query: String = format!("SELECT id,email,name,power FROM users WHERE id = {}", id);
+    if private && auth.associated_id != id {
+        return Err(Status::Unauthorized);
+    }
 
-            let data: Option<UserDataResponse> = _conn.query_map(_query, |(id, email, name, power)| {
-                UserDataResponse {
-                    id,
-                    email,
-                    global_name: name,
-                    power,
-                    flags: 0
-                }
-            }).unwrap().pop();
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("SELECT id,email,name,power FROM users WHERE id = {}", id);
 
-            if data.is_some() {
-                Ok(data.unwrap())
-            } else {
-                Err(Status::NotFound)
+        let data: Option<UserDataResponse> = _conn.query_map(_query, |(id, email, name, power)| {
+            UserDataResponse {
+                id,
+                email,
+                global_name: name,
+                power,
+                flags: 0
             }
+        }).unwrap().pop();
+
+        return if data.is_some() {
+            Ok(data.unwrap())
+        } else {
+            Err(Status::NotFound)
         }
-    } else {
-        Err(Status::Unauthorized)
     }
 }
 

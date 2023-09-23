@@ -173,7 +173,7 @@ pub async fn secret_application(authorization: TokenProps) -> Result<Json<Defaul
 
 #[get("/api/users/<id>")]
 pub async fn users_handler(authorization: TokenProps, id: i64) -> Result<Json<UserDataResponse>,Status> {
-    let data:Result<UserDataResponse, Status> = database::get_user_by_id(authorization,id).await;
+    let data:Result<UserDataResponse, Status> = database::get_user_by_id(authorization,id,false).await;
 
     return if data.is_ok() {
         Ok(Json(data.unwrap()))
@@ -186,6 +186,14 @@ pub async fn users_handler(authorization: TokenProps, id: i64) -> Result<Json<Us
 pub fn unauthorized() -> Json<DefaultGenericResponse>{
     Json(DefaultGenericResponse{
         message: "401: Unauthorized".to_string(),
+        code: 0
+    })
+}
+
+#[catch(404)]
+pub fn notfound() -> Json<DefaultGenericResponse>{
+    Json(DefaultGenericResponse{
+        message: "404: Not Found".to_string(),
         code: 0
     })
 }

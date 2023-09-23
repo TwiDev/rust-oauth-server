@@ -9,5 +9,5 @@ mod database;
 fn rocket() -> _ {
     unsafe { database::initialize(); }
 
-    rocket::build().mount("/", routes![server::signup_application,server::secret_application,server::token_application, server::users_handler]).register("/", catchers![server::unauthorized])
+    rocket::build().mount("/", routes![server::signup_application,server::secret_application,server::token_application, server::users_handler]).register("/", catchers![server::unauthorized,server::notfound])
 }
