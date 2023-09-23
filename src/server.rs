@@ -22,7 +22,8 @@ pub struct AuthorizationToken {
 pub struct TokenProps {
     pub token:AuthorizationToken,
     pub authorization: Authorization,
-    pub associated_id: i64
+    pub associated_id: i64,
+    pub scopes: u64
 }
 
 #[derive(Debug)]

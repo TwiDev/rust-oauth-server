@@ -1,5 +1,6 @@
 use std::arch::asm;
 use std::cell::OnceCell;
+use std::mem::discriminant;
 use std::str::FromStr;
 use mysql;
 use mysql::{Pool, PooledConn};
@@ -39,35 +40,38 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
 
         match auth._type {
             AuthorizationType::User => {
-                let _query: String = format!("SELECT id FROM users WHERE token = {}", auth.token);
+                let _query: String = format!("SELECT id,scopes FROM users WHERE token = {}", auth.token);
 
-                _conn.query_map(_query, |(id)| {
+                _conn.query_map(_query, |(id,scopes)| {
                     TokenProps {
                         token: auth,
                         authorization:Authorization::User,
-                        associated_id: id
+                        associated_id: id,
+                        scopes
                     }
                 }).unwrap().pop()
             }
             AuthorizationType::Bearer => {
-                let _query: String = format!("SELECT id, authorization_type FROM tokens WHERE accessToken = {}", auth.token);
+                let _query: String = format!("SELECT id,authorization_type,scopes FROM tokens WHERE accessToken = {}", auth.token);
 
-                _conn.query_map(_query, |(id,authorization_type)| {
+                _conn.query_map(_query, |(id,scopes,authorization_type)| {
                     TokenProps {
                         token:auth,
                         authorization: Authorization::from_str(authorization_type).unwrap(),
-                        associated_id: id
+                        associated_id: id,
+                        scopes
                     }
                 }).unwrap().pop()
             }
             AuthorizationType::Bot => {
-                let _query: String = format!("SELECT id FROM bots WHERE token = {}", auth.token);
+                let _query: String = format!("SELECT id,scopes FROM bots WHERE token = {}", auth.token);
 
-                _conn.query_map(_query, |(id)| {
+                _conn.query_map(_query, |(id,scopes)| {
                     TokenProps {
                         token:auth,
                         authorization: Authorization::User,
-                        associated_id: id
+                        associated_id: id,
+                        scopes
                     }
                 }).unwrap().pops()
             }
