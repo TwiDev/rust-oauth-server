@@ -11,7 +11,6 @@ use rocket::serde::json::Json;
 use serde::{Serialize, Deserialize};
 
 use crate::database;
-use crate::database::UserData;
 use crate::responses::{DefaultGenericResponse, UserDataResponse};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
