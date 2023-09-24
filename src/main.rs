@@ -4,6 +4,7 @@ use crate::server::AuthorizationType;
 mod server;
 mod responses;
 mod database;
+mod app;
 
 #[launch]
 fn rocket() -> _ {

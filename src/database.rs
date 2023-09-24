@@ -1,4 +1,5 @@
 use std::cell::OnceCell;
+use std::ptr::null;
 use std::str::FromStr;
 
 use mysql;
@@ -6,6 +7,7 @@ use mysql::{Pool, PooledConn};
 use mysql::prelude::Queryable;
 use rocket::http::Status;
 use rocket::serde::{Deserialize, Serialize};
+use crate::app::{ClientApp, ClientProperties};
 
 use crate::responses::UserDataResponse;
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
@@ -41,7 +43,7 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
 
         match auth._type {
             AuthorizationType::User => {
-                let _query: String = format!("SELECT id FROM users WHERE token = {}", auth.token);
+                let _query: String = format!("SELECT id FROM users WHERE token = '{}'", auth.token);
 
                 _conn.query_map(_query, |(id):(i64)| {
                     TokenProps {
@@ -123,6 +125,10 @@ pub async fn get_user_by_id(auth: TokenProps, id: i64, private: bool) -> Result<
             Err(Status::NotFound)
         }
     }
+}
+
+pub async fn create_client_app(properties: ClientProperties) -> Option<ClientApp> {
+    return None;
 }
 
 pub unsafe fn initialize() {
