@@ -8,6 +8,7 @@ use mysql::prelude::Queryable;
 use rocket::http::Status;
 use rocket::serde::{Deserialize, Serialize};
 use crate::app::{ClientApp, ClientProperties};
+use crate::errors::ServerError;
 
 use crate::responses::UserDataResponse;
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
@@ -127,7 +128,7 @@ pub async fn get_user_by_id(auth: TokenProps, id: i64, private: bool) -> Result<
     }
 }
 
-pub async fn create_client_app(properties: ClientApp) -> Result<ClientApp, Status> {
+pub async fn create_client_app(properties: ClientApp) -> Result<ClientApp, ServerError> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
         let _query: String = format!("INSERT INTO clients (secret,name,token,scopes) VALUES ('{}','{}','{}',{})",
@@ -140,7 +141,7 @@ pub async fn create_client_app(properties: ClientApp) -> Result<ClientApp, Statu
         return Ok(ClientApp::populate(properties, 10));
     }
 
-    return Err(Status::NoContent);
+    return Err(ServerError::NoConnection);
 }
 
 pub unsafe fn initialize() {
