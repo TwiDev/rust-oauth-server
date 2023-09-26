@@ -1,10 +1,12 @@
 use rocket::{catchers, launch, routes};
+use crate::errors::ServerError;
 use crate::server::AuthorizationType;
 
 mod server;
 mod responses;
 mod database;
 mod app;
+mod errors;
 
 #[launch]
 fn rocket() -> _ {
