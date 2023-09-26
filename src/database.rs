@@ -127,8 +127,20 @@ pub async fn get_user_by_id(auth: TokenProps, id: i64, private: bool) -> Result<
     }
 }
 
-pub async fn create_client_app(properties: ClientProperties) -> Option<ClientApp> {
-    return None;
+pub async fn create_client_app(properties: ClientApp) -> Result<ClientApp, Status> {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("INSERT INTO clients (secret,name,token,scopes) VALUES ('{}','{}','{}',{})",
+            properties.secret,
+            properties.properties.name,
+            properties.token,
+            properties.properties.scopes
+        );
+
+        return Ok(ClientApp::populate(properties, 10));
+    }
+
+    return Err(Status::NoContent);
 }
 
 pub unsafe fn initialize() {
