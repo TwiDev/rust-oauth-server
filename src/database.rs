@@ -106,9 +106,9 @@ pub async fn get_user_by_id(auth: TokenProps, id: i64, private: bool) -> Result<
 
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("SELECT id,email,name,power FROM users WHERE id = {}", id);
+        let _query: String = format!("SELECT id,name,power FROM users WHERE id = {}", id);
 
-        let data: Option<UserDataResponse> = _conn.query_map(_query, |(id, email, name, power)| {
+        let data: Option<UserDataResponse> = _conn.query_map(_query, |(id, name, power)| {
             UserDataResponse {
                 id,
                 global_name: name,
