@@ -1,20 +1,20 @@
 use std::fmt;
 
 #[derive(Debug, Clone, Copy)]
-pub struct ServerError {
+pub struct ServerStatus {
     pub code: u16,
 }
 
-impl Default for ServerError {
+impl Default for ServerStatus {
     fn default() -> Self {
-        ServerError::Ok
+        ServerStatus::Ok
     }
 }
 
 macro_rules! dst {
     ($($code:expr, $code_str:expr, $name:ident => $reason:expr),+) => {
         $(
-            pub const $name: ServerError = ServerError {code: $code};
+            pub const $name: ServerStatus = ServerStatus {code: $code};
         )+
 
         pub const fn reason(&self) -> Option<&'static str> {
@@ -34,7 +34,7 @@ macro_rules! dst {
     };
 }
 
-impl ServerError {
+impl ServerStatus {
     dst! {
         100, "100", Continue => "Continue",
         200, "200", Ok => "Ok",
@@ -45,7 +45,7 @@ impl ServerError {
     }
 }
 
-impl fmt::Display for ServerError {
+impl fmt::Display for ServerStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.code >= 300 {
             write!(f, "A Server Error occurred! Code: {} Reason: {}", self.code, self.reason_lossy())
@@ -55,7 +55,7 @@ impl fmt::Display for ServerError {
     }
 }
 
-impl PartialEq for ServerError {
+impl PartialEq for ServerStatus {
     fn eq(&self, other: &Self) -> bool {
         self.code.eq(&other.code)
     }

@@ -3,14 +3,12 @@ use std::ptr::null;
 use std::str::FromStr;
 
 use mysql;
-use mysql::{Pool, PooledConn};
+use mysql::{Error, params, Pool, PooledConn};
 use mysql::prelude::Queryable;
 use rocket::http::Status;
 use rocket::serde::{Deserialize, Serialize};
 use crate::app::{ClientApp, ClientProperties};
-use crate::errors::ServerError;
-
-use crate::responses::UserDataResponse;
+use crate::responses::{PrivateUserDataResponse, UserDataResponse};
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
 
 const URL: &str = "mysql://root:root@localhost:3306/oauth";
@@ -75,7 +73,7 @@ pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
                 }).unwrap().pop()
             }
             AuthorizationType::Bot => {
-                let _query: String = format!("SELECT id,scopes FROM bots WHERE token = {}", auth.token);
+                let _query: String = format!("SELECT id,scopes FROM clients WHERE token = '{}'", auth.token);
 
                 _conn.query_map(_query, |(id, scopes)| {
                     TokenProps {
@@ -113,6 +111,36 @@ pub async fn get_user_by_id(auth: TokenProps, id: i64, private: bool) -> Result<
         let data: Option<UserDataResponse> = _conn.query_map(_query, |(id, email, name, power)| {
             UserDataResponse {
                 id,
+                global_name: name,
+                power,
+                flags: 0
+            }
+        }).unwrap().pop();
+
+        return if data.is_some() {
+            Ok(data.unwrap())
+        } else {
+            Err(Status::NotFound)
+        }
+    }
+}
+
+pub async fn get_private_user_by_id(auth: TokenProps, id: i64) -> Result<PrivateUserDataResponse, Status> {
+    if auth.scopes < 5 {
+        return Err(Status::Unauthorized);
+    }
+
+    if auth.associated_id != id {
+        return Err(Status::Unauthorized);
+    }
+
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("SELECT id,email,name,power FROM users WHERE id = {}", id);
+
+        let data: Option<PrivateUserDataResponse> = _conn.query_map(_query, |(id, email, name, power)| {
+            PrivateUserDataResponse {
+                id,
                 email,
                 global_name: name,
                 power,
@@ -128,20 +156,20 @@ pub async fn get_user_by_id(auth: TokenProps, id: i64, private: bool) -> Result<
     }
 }
 
-pub async fn create_client_app(properties: ClientApp) -> Result<ClientApp, ServerError> {
-    unsafe {
+pub async unsafe fn create_client_app(properties: ClientApp) -> Result<ClientApp, Error> {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("INSERT INTO clients (secret,name,token,scopes) VALUES ('{}','{}','{}',{})",
-            properties.secret,
-            properties.properties.name,
-            properties.token,
-            properties.properties.scopes
-        );
+        let _query: String = format!("INSERT INTO clients (secret,name,token,scopes) VALUES (:secret,:name,:token,:scopes)");
 
-        return Ok(ClientApp::populate(properties, 10));
-    }
+        let p: &ClientApp = &properties;
 
-    return Err(ServerError::NoConnection);
+        _conn.exec_drop(_query,
+                        params! {
+            "secret" => p.secret.clone(),
+            "name" => p.properties.name.clone(),
+            "token" => p.token.clone(),
+            "scopes" => p.properties.scopes
+            },
+        ).and_then(|_| Ok((ClientApp::populate(properties, _conn.last_insert_id()))))
 }
 
 pub unsafe fn initialize() {

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use std::string::ToString;
-use rocket::{async_trait, catch, get, Request, request, Response};
+use rocket::{async_trait, catch, get, post, Request, request, Response};
 
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::form::validate::Contains;
@@ -9,9 +9,10 @@ use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use rocket::serde::json::Json;
 use serde::{Serialize, Deserialize};
+use crate::app::{ClientApp, ClientProperties};
 
 use crate::database;
-use crate::responses::{DefaultGenericResponse, UserDataResponse};
+use crate::responses::{ClientAppResponse, DefaultGenericResponse, PrivateUserDataResponse, UserDataResponse};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct AuthorizationToken {
@@ -178,6 +179,38 @@ pub async fn users_handler(authorization: TokenProps, id: i64) -> Result<Json<Us
         Ok(Json(data.unwrap()))
     }else{
         Err(data.unwrap_err())
+    }
+}
+
+#[get("/api/private/<id>")]
+pub async fn private_users_handler(authorization: TokenProps, id: i64) -> Result<Json<PrivateUserDataResponse>,Status> {
+    let data:Result<PrivateUserDataResponse, Status> = database::get_private_user_by_id(authorization,id).await;
+
+    return if data.is_ok() {
+        Ok(Json(data.unwrap()))
+    }else{
+        Err(data.unwrap_err())
+    }
+}
+
+
+#[post("/api/client", data="<body>")]
+pub async fn client_factory(mut body: String) -> Result<Json<ClientAppResponse>, Status> {
+    println!("{}",body);
+
+    unsafe {
+        let app: ClientApp = database::create_client_app(ClientApp::new_empty(ClientProperties {
+            name: body,
+            scopes: 10
+        })).await.unwrap();
+
+        Ok(Json(ClientAppResponse {
+            id: app.id,
+            name: app.properties.name.clone(),
+            token: app.token.clone(),
+            secret: app.secret.clone(),
+            scopes: app.properties.scopes
+        }))
     }
 }
 
