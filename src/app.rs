@@ -39,6 +39,7 @@ pub struct AccessTokenResponse {
     pub scope: String
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ClientAuthorizationRequest {
 
     pub client_id: u64,

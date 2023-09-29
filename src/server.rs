@@ -156,7 +156,7 @@ pub async fn signup_application() -> Result<Json<DefaultGenericResponse>,Status>
 
 #[post("/oauth/token", format = "json", data = "<body>")]
 pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<AccessTokenResponse>,Status> {
-    if let Some(user_id) = database::verify_authorization(body.code).await {
+    if let Some(user_id) = database::verify_authorization(body.code.clone()).await {
         if let Some(app) = database::verify_client(body.client_id, body.client_secret.clone()).await {
             let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app, user_id).await;
             return match token_result {
@@ -172,20 +172,24 @@ pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<Ac
 #[post("/oauth/authorize", format="json", data="<body>")]
 pub async fn authorization_handler(auth: TokenProps, body: Json<ClientAuthorizationRequest>) -> Result<Json<DefaultGenericResponse>, Status> {
     if auth.token._type != AuthorizationType::User {
-        Err(Status::Unauthorized)
+        return Err(Status::Unauthorized);
     }
 
     if let Some(app) = database::get_client(body.client_id).await {
         let user_id: i64 = auth.associated_id;
 
-        if let Some(code) = database::authorize_client(user_id, app).await {
-            Ok(DefaultGenericResponse{
-                code: 0,
-                message: code
-            })
-        }
+        return match database::authorize_client(user_id, app).await {
+            Ok(code) => {
+                Ok(Json(DefaultGenericResponse {
+                    code: 0,
+                    message: code
+                }))
+            },
+            Err(..) => {
+                Err(Status::BadRequest)
+            }
+        };
 
-        Err(Status::BadRequest)
     }else{
         Err(Status::NotFound)
     }

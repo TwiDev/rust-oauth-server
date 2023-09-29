@@ -4,8 +4,9 @@ use std::str::FromStr;
 use rand::Rng;
 use nanoid::nanoid;
 use mysql;
-use mysql::{Error, params, Pool, PooledConn};
+use mysql::{Error, params, Params, Pool, PooledConn};
 use mysql::prelude::Queryable;
+use rocket::futures::stream::SplitStream;
 use rocket::http::Status;
 use rocket::serde::{Deserialize, Serialize};
 use crate::app::{ClientApp, ClientProperties};
@@ -164,7 +165,7 @@ pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, Se
         let _query: String = format!("INSERT INTO tokens (secret,name,token,scopes) VALUES (:secret,:name,:token,:scopes)");
         let p: &ClientApp = &app;
 
-        return match _conn.exec(_query,
+        return match _conn.exec::<String, String, Params>(_query,
                                      params! {
             "secret" => p.secret.clone(),
             "name" => p.properties.name.clone(),
@@ -174,7 +175,7 @@ pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, Se
             Ok(..) => {
                 let code: String = nanoid!();
 
-                _conn.exec("INSERT INTO authorization_code (id, associated_id) VALUES (:id,:associated_id)", params! {
+                _conn.exec::<String, String, Params>("INSERT INTO authorization_code (id, associated_id) VALUES (:id,:associated_id)".to_string(), params! {
                     "id" => code.clone(),
                     "associated_id" => user_id
                 }).expect("panic!");
