@@ -179,6 +179,14 @@ pub async fn get_private_user_by_id(auth: TokenProps, id: i64) -> Result<Private
     }
 }
 
+pub async fn delete_authorization_code(code: String) {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("DELETE FROM tokens WHERE id=':id'");
+        _conn.exec_drop(_query, params! {"id" => code}).unwrap();
+    }
+}
+
 pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;

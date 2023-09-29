@@ -14,6 +14,7 @@ use serde::{Serialize, Deserialize};
 use crate::app::{AccessTokenResponse, ClientApp, ClientAuthorizationRequest, ClientProperties, ClientTokenRequest};
 
 use crate::database;
+use crate::database::delete_authorization_code;
 use crate::responses::{ClientAppResponse, DefaultGenericResponse, PrivateUserDataResponse, UserDataResponse};
 use crate::status::ServerStatus;
 
@@ -156,12 +157,18 @@ pub async fn signup_application() -> Result<Json<DefaultGenericResponse>,Status>
 
 #[post("/oauth/token", format = "json", data = "<body>")]
 pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<AccessTokenResponse>,Status> {
-    if let Some(user_id) = database::verify_authorization(body.code.clone()).await {
+    let code: String = body.code.clone();
+
+    if let Some(user_id) = database::verify_authorization(code).await {
         if let Some(app) = database::verify_client(body.client_id, body.client_secret.clone()).await {
             //TODO: Verify Bearer Token not app bot token
             let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app.id, user_id).await;
             return match token_result {
-                Ok(token) => Ok(Json(AccessTokenResponse::new_from_authorization(token, 86400))),
+                Ok(token) => {
+                    delete_authorization_code(code.clone());
+
+                    Ok(Json(AccessTokenResponse::new_from_authorization(token, 86400)))
+                },
                 Err(status) => Err(Status::NotFound)
             }
         }
