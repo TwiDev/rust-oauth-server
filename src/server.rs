@@ -165,7 +165,7 @@ pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<Ac
             let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app.id, user_id).await;
             return match token_result {
                 Ok(token) => {
-                    delete_authorization_code(code.clone());
+                    delete_authorization_code(body.code.clone());
 
                     Ok(Json(AccessTokenResponse::new_from_authorization(token, 86400)))
                 },
