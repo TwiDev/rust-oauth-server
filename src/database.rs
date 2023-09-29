@@ -10,6 +10,7 @@ use rocket::serde::{Deserialize, Serialize};
 use crate::app::{ClientApp, ClientProperties};
 use crate::responses::{PrivateUserDataResponse, UserDataResponse};
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
+use crate::status::ServerStatus;
 
 const URL: &str = "mysql://root:root@localhost:3306/oauth";
 static mut DB_POOL: OnceCell<Pool> = OnceCell::new();
@@ -170,6 +171,40 @@ pub async unsafe fn create_client_app(properties: ClientApp) -> Result<ClientApp
             "scopes" => p.properties.scopes
             },
         ).and_then(|_| Ok((ClientApp::populate(properties, _conn.last_insert_id()))))
+}
+
+pub async fn verify_client(id: u64, secret: String) -> Option<ClientApp> {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("SELECT * FROM clients WHERE id = {} AND secret = {}", id, secret);
+
+        _conn.query_map(_query, |(id, secret, token, name, scopes)| {
+            ClientApp {
+                id,
+                secret,
+                token,
+                properties: ClientProperties{
+                    name,
+                    scopes
+                }
+            }
+        }).unwrap().pop()
+    }
+}
+
+pub async fn verify_client_authorization(app: ClientApp, client_id: i64) -> Result<TokenProps, ServerStatus> {
+    if let Some(token) = verify_token(AuthorizationToken{
+        token: app.token.clone(),
+        _type: AuthorizationType::Bearer
+    }).await {
+        if token.associated_id == client_id {
+            Ok(token)
+        }else{
+            Err(ServerStatus::Unauthorized)
+        }
+    }else{
+        Err(ServerStatus::TokenNotExist)
+    }
 }
 
 pub unsafe fn initialize() {

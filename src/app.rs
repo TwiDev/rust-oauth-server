@@ -1,4 +1,5 @@
 use nanoid::nanoid;
+use crate::server::{Authorization, AuthorizationToken, TokenProps};
 
 #[derive(Clone)]
 pub struct ClientProperties {
@@ -15,6 +16,36 @@ pub struct ClientApp {
     pub secret: String,
     pub token: String,
     pub properties: ClientProperties
+
+}
+
+pub struct ClientTokenRequest {
+
+    pub client_id: u64,
+    pub client_secret: String,
+    pub grant_type: String,
+    pub code: i64
+}
+
+pub struct AccessTokenResponse {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: u32,
+    pub refresh_token: String,
+    pub scope: String
+}
+
+impl AccessTokenResponse {
+
+    pub fn new_from_authorization(auth: TokenProps, duration: u32) -> AccessTokenResponse {
+        return AccessTokenResponse{
+            access_token: auth.token.token,
+            token_type: auth.token._type.as_str().to_string(),
+            expires_in: duration,
+            refresh_token: "null".to_string(),
+            scope: auth.scopes.to_string(),
+        }
+    }
 
 }
 

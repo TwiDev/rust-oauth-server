@@ -9,7 +9,7 @@ use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use rocket::serde::json::Json;
 use serde::{Serialize, Deserialize};
-use crate::app::{ClientApp, ClientProperties};
+use crate::app::{AccessTokenResponse, ClientApp, ClientProperties, ClientTokenRequest};
 
 use crate::database;
 use crate::responses::{ClientAppResponse, DefaultGenericResponse, PrivateUserDataResponse, UserDataResponse};
@@ -50,7 +50,7 @@ pub enum Authorization {
 }
 
 impl AuthorizationType {
-    fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             AuthorizationType::User => "",
             AuthorizationType::Bearer => "Bearer",
@@ -151,16 +151,15 @@ pub async fn signup_application() -> Result<Json<DefaultGenericResponse>,Status>
     return Ok(Json(DefaultGenericResponse{message:"".to_string(),code:0}));
 }
 
-#[get("/oauth/token")]
-pub async fn token_application() -> Result<Json<DefaultGenericResponse>,Status> {
-    if true {
-        Err(Status::Unauthorized)
-    }else {
-        Ok(Json(DefaultGenericResponse {
-            code: 0,
-            message: "".to_string()
-        }))
+#[post("/oauth/token", format = "json", data = "<body>")]
+pub async fn token_application(body: &mut Json<ClientTokenRequest>) -> Result<Json<AccessTokenResponse>,Status> {
+    if let Some(app) = database::verify_client(body.client_id, body.client_secret) {
+        // TODO: Get client_id from code
+
+        database::verify_client_authorization(app, );
     }
+
+    Err(Status::Unauthorized)
 }
 
 #[get("/oauth/secret")]
@@ -194,7 +193,7 @@ pub async fn private_users_handler(authorization: TokenProps, id: i64) -> Result
 }
 
 
-#[post("/api/client", data="<body>")]
+#[post("/api/authorize", data="<body>")]
 pub async fn client_factory(mut body: String) -> Result<Json<ClientAppResponse>, Status> {
     println!("{}",body);
 

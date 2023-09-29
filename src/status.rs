@@ -41,7 +41,8 @@ impl ServerStatus {
         300, "300", NoConnection => "Connection not established",
         400, "400", BadRequest => "Bad Request",
         401, "401", Unauthorized => "Unauthorized",
-        404, "404", NotFound => "Not Found"
+        404, "404", NotFound => "Not Found",
+        405, "405", TokenNotExist => "Token does not exist"
     }
 }
 

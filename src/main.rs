@@ -5,6 +5,7 @@ mod responses;
 mod database;
 mod app;
 mod status;
+mod test;
 
 #[launch]
 fn rocket() -> _ {
