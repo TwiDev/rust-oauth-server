@@ -21,5 +21,5 @@ fn rocket() -> _ {
         server::private_users_handler,
         server::client_factory,
         server::authorization_handler
-    ]).register("/", catchers![server::unauthorized,server::notfound])
+    ]).register("/", catchers![server::unauthorized,server::notfound,server::badrequest])
 }

@@ -39,6 +39,26 @@ pub struct UserData {
     pub power: i32,
 }
 
+pub async fn verify_token_by_index(client_id: u64, user_id: i64) -> Option<TokenProps> {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("SELECT accessToken,id,scopes,authorization_tye FROM tokens WHERE client_id = {} AND id = {} LIMIT 1", client_id, user_id);
+
+        println!("{}", _query);
+        _conn.query_map::<(String, i64, i64, String), _, _, TokenProps>(_query, |(accessToken,id, scopes, authorization_tye)| {
+            TokenProps {
+                token: AuthorizationToken{
+                    _type: AuthorizationType::Bearer,
+                    token: accessToken
+                },
+                authorization: Authorization::User,
+                associated_id: id,
+                scopes,
+            }
+        }).unwrap().pop()
+    }
+}
+
 pub async fn verify_token(auth: AuthorizationToken) -> Option<TokenProps> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
@@ -162,7 +182,7 @@ pub async fn get_private_user_by_id(auth: TokenProps, id: i64) -> Result<Private
 pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("INSERT INTO tokens (accessToken,id,scopes,authorization_tye) VALUES (:token,:id,:scopes,:authorization_tye)");
+        let _query: String = format!("INSERT INTO tokens (accessToken,id,scopes,authorization_tye,client_id) VALUES (:token,:id,:scopes,:authorization_tye,:client_id)");
         let p: &ClientApp = &app;
 
         return match _conn.exec_drop::<String, Params>(_query,
@@ -170,7 +190,8 @@ pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, Se
             "token" => "Bearer".to_owned() + &nanoid!(),
             "id" => user_id,
             "scopes" =>  p.properties.scopes,
-            "authorization_tye" => AuthorizationType::User.as_str().to_string()
+            "authorization_tye" => AuthorizationType::User.as_str().to_string(),
+            "client_id" => app.id
             }) {
             Ok(..) => {
                 let code: String = nanoid!();
@@ -257,16 +278,9 @@ pub async fn verify_authorization(code: String) -> Option<i64> {
     }
 }
 
-pub async fn verify_client_authorization(app: ClientApp, client_id: i64) -> Result<TokenProps, ServerStatus> {
-    if let Some(token) = verify_token(AuthorizationToken{
-        token: app.token.clone(),
-        _type: AuthorizationType::Bearer
-    }).await {
-        if token.associated_id == client_id {
-            Ok(token)
-        }else{
-            Err(ServerStatus::Unauthorized)
-        }
+pub async fn verify_client_authorization(client_id: u64, user_id: i64) -> Result<TokenProps, ServerStatus> {
+    if let Some(token) = verify_token_by_index(client_id, user_id).await {
+        Ok(token)
     }else{
         Err(ServerStatus::TokenNotExist)
     }
