@@ -1,4 +1,6 @@
 use nanoid::nanoid;
+use rocket::serde::Serialize;
+use serde::Deserialize;
 use crate::server::{Authorization, AuthorizationToken, TokenProps};
 
 #[derive(Clone)]
@@ -19,20 +21,29 @@ pub struct ClientApp {
 
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ClientTokenRequest {
 
     pub client_id: u64,
     pub client_secret: String,
     pub grant_type: String,
-    pub code: i64
+    pub code: String
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct AccessTokenResponse {
     pub access_token: String,
     pub token_type: String,
     pub expires_in: u32,
     pub refresh_token: String,
     pub scope: String
+}
+
+pub struct ClientAuthorizationRequest {
+
+    pub client_id: u64,
+    pub scopes: i64
+
 }
 
 impl AccessTokenResponse {

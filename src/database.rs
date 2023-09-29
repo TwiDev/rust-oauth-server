@@ -1,7 +1,8 @@
 use std::cell::OnceCell;
 use std::ptr::null;
 use std::str::FromStr;
-
+use rand::Rng;
+use nanoid::nanoid;
 use mysql;
 use mysql::{Error, params, Pool, PooledConn};
 use mysql::prelude::Queryable;
@@ -157,6 +158,36 @@ pub async fn get_private_user_by_id(auth: TokenProps, id: i64) -> Result<Private
     }
 }
 
+pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, ServerStatus> {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("INSERT INTO tokens (secret,name,token,scopes) VALUES (:secret,:name,:token,:scopes)");
+        let p: &ClientApp = &app;
+
+        return match _conn.exec(_query,
+                                     params! {
+            "secret" => p.secret.clone(),
+            "name" => p.properties.name.clone(),
+            "token" => nanoid!(),
+            "scopes" => p.properties.scopes
+            }) {
+            Ok(..) => {
+                let code: String = nanoid!();
+
+                _conn.exec("INSERT INTO authorization_code (id, associated_id) VALUES (:id,:associated_id)", params! {
+                    "id" => code.clone(),
+                    "associated_id" => user_id
+                }).expect("panic!");
+
+                Ok(code)
+            },
+            Err(..) => Err(ServerStatus::BadRequest)
+        };
+
+
+    }
+}
+
 pub async unsafe fn create_client_app(properties: ClientApp) -> Result<ClientApp, Error> {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
         let _query: String = format!("INSERT INTO clients (secret,name,token,scopes) VALUES (:secret,:name,:token,:scopes)");
@@ -176,7 +207,7 @@ pub async unsafe fn create_client_app(properties: ClientApp) -> Result<ClientApp
 pub async fn verify_client(id: u64, secret: String) -> Option<ClientApp> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("SELECT * FROM clients WHERE id = {} AND secret = {}", id, secret);
+        let _query: String = format!("SELECT * FROM clients WHERE id = {:?} AND secret = {:?}", id, secret);
 
         _conn.query_map(_query, |(id, secret, token, name, scopes)| {
             ClientApp {
@@ -188,6 +219,36 @@ pub async fn verify_client(id: u64, secret: String) -> Option<ClientApp> {
                     scopes
                 }
             }
+        }).unwrap().pop()
+    }
+}
+
+pub async fn get_client(id: u64) -> Option<ClientApp> {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("SELECT * FROM clients WHERE id = {:?}", id);
+
+        _conn.query_map(_query, |(id, secret, token, name, scopes)| {
+            ClientApp {
+                id,
+                secret,
+                token,
+                properties: ClientProperties{
+                    name,
+                    scopes
+                }
+            }
+        }).unwrap().pop()
+    }
+}
+
+pub async fn verify_authorization(code: String) -> Option<i64> {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("SELECT associated_id FROM authorization_code WHERE id = {:?}", code);
+
+        _conn.query_map(_query, |(associated_id)| {
+            associated_id
         }).unwrap().pop()
     }
 }

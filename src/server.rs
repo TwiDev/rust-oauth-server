@@ -1,3 +1,4 @@
+use std::io::ErrorKind::NotFound;
 use std::str::FromStr;
 use std::string::ToString;
 use rocket::{async_trait, catch, get, post, Request, request, Response};
@@ -5,14 +6,16 @@ use rocket::{async_trait, catch, get, post, Request, request, Response};
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::form::validate::Contains;
 use rocket::http::{Header, Status};
+use rocket::http::hyper::body::Buf;
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use rocket::serde::json::Json;
 use serde::{Serialize, Deserialize};
-use crate::app::{AccessTokenResponse, ClientApp, ClientProperties, ClientTokenRequest};
+use crate::app::{AccessTokenResponse, ClientApp, ClientAuthorizationRequest, ClientProperties, ClientTokenRequest};
 
 use crate::database;
 use crate::responses::{ClientAppResponse, DefaultGenericResponse, PrivateUserDataResponse, UserDataResponse};
+use crate::status::ServerStatus;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct AuthorizationToken {
@@ -152,14 +155,41 @@ pub async fn signup_application() -> Result<Json<DefaultGenericResponse>,Status>
 }
 
 #[post("/oauth/token", format = "json", data = "<body>")]
-pub async fn token_application(body: &mut Json<ClientTokenRequest>) -> Result<Json<AccessTokenResponse>,Status> {
-    if let Some(app) = database::verify_client(body.client_id, body.client_secret) {
-        // TODO: Get client_id from code
-
-        database::verify_client_authorization(app, );
+pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<AccessTokenResponse>,Status> {
+    if let Some(user_id) = database::verify_authorization(body.code).await {
+        if let Some(app) = database::verify_client(body.client_id, body.client_secret.clone()).await {
+            let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app, user_id).await;
+            return match token_result {
+                Ok(token) => Ok(Json(AccessTokenResponse::new_from_authorization(token, 86400))),
+                Err(status) => Err(Status::NotFound)
+            }
+        }
     }
 
     Err(Status::Unauthorized)
+}
+
+#[post("/oauth/authorize", format="json", data="<body>")]
+pub async fn authorization_handler(auth: TokenProps, body: Json<ClientAuthorizationRequest>) -> Result<Json<DefaultGenericResponse>, Status> {
+    if auth.token._type != AuthorizationType::User {
+        Err(Status::Unauthorized)
+    }
+
+    if let Some(app) = database::get_client(body.client_id).await {
+        let user_id: i64 = auth.associated_id;
+
+        if let Some(code) = database::authorize_client(user_id, app).await {
+            Ok(DefaultGenericResponse{
+                code: 0,
+                message: code
+            })
+        }
+
+        Err(Status::BadRequest)
+    }else{
+        Err(Status::NotFound)
+    }
+
 }
 
 #[get("/oauth/secret")]
@@ -192,8 +222,7 @@ pub async fn private_users_handler(authorization: TokenProps, id: i64) -> Result
     }
 }
 
-
-#[post("/api/authorize", data="<body>")]
+#[post("/api/client", data="<body>")]
 pub async fn client_factory(mut body: String) -> Result<Json<ClientAppResponse>, Status> {
     println!("{}",body);
 

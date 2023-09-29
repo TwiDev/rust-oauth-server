@@ -42,7 +42,8 @@ impl ServerStatus {
         400, "400", BadRequest => "Bad Request",
         401, "401", Unauthorized => "Unauthorized",
         404, "404", NotFound => "Not Found",
-        405, "405", TokenNotExist => "Token does not exist"
+        405, "405", TokenNotExist => "Token does not exist",
+        406, "406", AlreadyExist => "Already exist"
     }
 }
 
