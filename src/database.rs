@@ -162,15 +162,15 @@ pub async fn get_private_user_by_id(auth: TokenProps, id: i64) -> Result<Private
 pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("INSERT INTO tokens (secret,name,token,scopes) VALUES (:secret,:name,:token,:scopes)");
+        let _query: String = format!("INSERT INTO tokens (accessToken,id,scopes,authorization_tye) VALUES (:token,:id,:scopes,:authorization_tye)");
         let p: &ClientApp = &app;
 
-        return match _conn.exec::<String, String, Params>(_query,
-                                     params! {
-            "secret" => p.secret.clone(),
-            "name" => p.properties.name.clone(),
-            "token" => nanoid!(),
-            "scopes" => p.properties.scopes
+        return match _conn.exec_drop::<String, Params>(_query,
+                                                       params! {
+            "token" => "Bearer".to_owned() + &nanoid!(),
+            "id" => user_id,
+            "scopes" =>  p.properties.scopes,
+            "authorization_tye" => AuthorizationType::User.as_str().to_string()
             }) {
             Ok(..) => {
                 let code: String = nanoid!();
@@ -182,7 +182,10 @@ pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, Se
 
                 Ok(code)
             },
-            Err(..) => Err(ServerStatus::BadRequest)
+            Err(err) =>  {
+                println!("{}", err);
+                Err(ServerStatus::BadRequest)
+            }
         };
 
 
@@ -210,7 +213,7 @@ pub async fn verify_client(id: u64, secret: String) -> Option<ClientApp> {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
         let _query: String = format!("SELECT * FROM clients WHERE id = {:?} AND secret = {:?}", id, secret);
 
-        _conn.query_map(_query, |(id, secret, token, name, scopes)| {
+        _conn.query_map(_query, |(id, secret, name, token, scopes)| {
             ClientApp {
                 id,
                 secret,
@@ -229,7 +232,7 @@ pub async fn get_client(id: u64) -> Option<ClientApp> {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
         let _query: String = format!("SELECT * FROM clients WHERE id = {:?}", id);
 
-        _conn.query_map(_query, |(id, secret, token, name, scopes)| {
+        _conn.query_map(_query, |(id, secret, name, token, scopes)| {
             ClientApp {
                 id,
                 secret,

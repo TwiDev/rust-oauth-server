@@ -1,4 +1,6 @@
 use rocket::{catchers, launch, routes};
+use rocket::serde::json::Json;
+use crate::app::ClientAuthorizationRequest;
 
 mod server;
 mod responses;
@@ -17,6 +19,7 @@ fn rocket() -> _ {
         server::token_application,
         server::users_handler,
         server::private_users_handler,
-        server::client_factory
+        server::client_factory,
+        server::authorization_handler
     ]).register("/", catchers![server::unauthorized,server::notfound])
 }

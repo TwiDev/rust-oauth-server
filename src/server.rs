@@ -158,6 +158,7 @@ pub async fn signup_application() -> Result<Json<DefaultGenericResponse>,Status>
 pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<AccessTokenResponse>,Status> {
     if let Some(user_id) = database::verify_authorization(body.code.clone()).await {
         if let Some(app) = database::verify_client(body.client_id, body.client_secret.clone()).await {
+            //TODO: Verify Bearer Token not app bot token
             let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app, user_id).await;
             return match token_result {
                 Ok(token) => Ok(Json(AccessTokenResponse::new_from_authorization(token, 86400))),
