@@ -1,13 +1,13 @@
 use std::cell::OnceCell;
 use std::ptr::null;
 use std::str::FromStr;
-use rand::Rng;
 use nanoid::nanoid;
 use mysql;
 use mysql::{Error, params, Params, Pool, PooledConn};
 use mysql::prelude::Queryable;
 use rocket::http::Status;
 use rocket::serde::{Deserialize, Serialize};
+
 use crate::app;
 use crate::app::{ClientApp, ClientProperties};
 use crate::responses::{PrivateUserDataResponse, UserDataResponse};
@@ -69,27 +69,29 @@ pub async fn create_token(user_id: i64, app: ClientApp) -> Result<TokenProps, Se
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
         let p: &ClientApp = &app;
 
-        let props: TokenProps = TokenProps {
-            token: AuthorizationToken {
-                _type: AuthorizationType::Bearer,
-                token: app::generate_token(AuthorizationType::Bearer),
-            },
-            authorization: Authorization::User,
-            associated_id: user_id,
-            scopes: app.properties.scopes,
-        };
+        let token: String = app::generate_token(AuthorizationType::Bearer);
 
         let _query: String = format!("INSERT INTO tokens (accessToken,id,scopes,authorization_tye,client_id) VALUES (:token,:id,:scopes,:authorization_tye,:client_id)");
         return match _conn.exec_drop::<String, Params>(_query,
                                                        params! {
-            "token" => props.token.token,
-            "id" => props.associated_id,
-            "scopes" =>  props.scopes,
-            "authorization_tye" => props.authorization.as_str().to_string(),
+            "token" => token.clone(),
+            "id" => user_id,
+            "scopes" =>  p.properties.scopes,
+            "authorization_tye" => "User",
             "client_id" => p.id
             })
         {
-            Ok(..) => Ok(*props),
+            Ok(..) => {
+                Ok(TokenProps {
+                    token: AuthorizationToken {
+                        _type: AuthorizationType::Bearer,
+                        token: token.clone(),
+                    },
+                    authorization: Authorization::User,
+                    associated_id: user_id,
+                    scopes: p.properties.scopes,
+                })
+            },
             Err(..) => Err(ServerStatus::BadRequest)
         }
     }
@@ -304,11 +306,7 @@ pub async fn verify_authorization(code: String) -> Option<i64> {
 }
 
 pub async fn verify_client_authorization(client: ClientApp, user_id: i64) -> Result<TokenProps, ServerStatus> {
-    return if let Some(token) = verify_token_by_index(client, user_id).await {
-        Ok(token)
-    }else{
-        Err(ServerStatus::TokenNotExist)
-    }
+    return verify_token_by_index(client, user_id).await
 }
 
 pub unsafe fn initialize() {

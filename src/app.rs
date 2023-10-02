@@ -3,7 +3,7 @@ use rocket::serde::Serialize;
 use serde::Deserialize;
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
 
-#[derive(Clone)]
+#[derive(Serialize, Clone)]
 pub struct ClientProperties {
 
     pub name: String,

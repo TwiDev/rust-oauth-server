@@ -1,4 +1,3 @@
-use std::io::ErrorKind::NotFound;
 use std::str::FromStr;
 use std::string::ToString;
 use rocket::{async_trait, catch, get, post, Request, request, Response};
@@ -6,11 +5,11 @@ use rocket::{async_trait, catch, get, post, Request, request, Response};
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::form::validate::Contains;
 use rocket::http::{Header, Status};
-use rocket::http::hyper::body::Buf;
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use rocket::serde::json::Json;
 use serde::{Serialize, Deserialize};
+
 use crate::app::{AccessTokenResponse, ClientApp, ClientAuthorizationRequest, ClientProperties, ClientTokenRequest};
 
 use crate::database;
@@ -178,9 +177,9 @@ pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<Ac
 }
 
 #[get("/oauth/app")]
-pub async fn app_handler(auth: TokenProps) -> Result<Json<AppHandlerResponse>> {
+pub async fn app_handler(auth: TokenProps) -> Result<Json<AppHandlerResponse>, Status> {
     if auth.token._type != AuthorizationType::User {
-        return Err(Status::Unauthorized);
+        return Err(Status::Unauthorized)
     }
 
     let mut apps: Vec<ClientProperties> = Vec::new();
