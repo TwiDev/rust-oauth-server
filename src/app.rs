@@ -1,7 +1,7 @@
 use nanoid::nanoid;
 use rocket::serde::Serialize;
 use serde::Deserialize;
-use crate::server::{Authorization, AuthorizationToken, TokenProps};
+use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
 
 #[derive(Clone)]
 pub struct ClientProperties {
@@ -66,7 +66,7 @@ impl ClientApp {
     pub fn new_empty(properties: ClientProperties) -> ClientApp {
         let pop: &ClientProperties = &properties;
         let secret: String = generate_app_secret(pop);
-        let token: String = generate_app_token(pop);
+        let token: String = generate_token(AuthorizationType::Bot);
 
         return ClientApp{
             id: 0,
@@ -79,7 +79,7 @@ impl ClientApp {
     pub fn new(properties: ClientProperties, id: u64) -> ClientApp {
         let pop: &ClientProperties = &properties;
         let secret: String = generate_app_secret(pop);
-        let token: String = generate_app_token(pop);
+        let token: String = generate_token(AuthorizationType::Bot);
 
         return ClientApp{
             id,
@@ -97,8 +97,8 @@ impl ClientApp {
     }
 }
 
-pub fn generate_app_token(properties: &ClientProperties) -> String {
-    return "Bot".to_owned() + &nanoid!().to_string()
+pub fn generate_token(_type: AuthorizationType) -> String {
+    return _type.as_str().to_string().to_owned() + &nanoid!().to_string()
 }
 
 pub fn generate_app_secret(properties: &ClientProperties) -> String {

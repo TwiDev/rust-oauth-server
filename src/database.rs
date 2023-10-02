@@ -6,10 +6,10 @@ use nanoid::nanoid;
 use mysql;
 use mysql::{Error, params, Params, Pool, PooledConn};
 use mysql::prelude::Queryable;
-use rocket::futures::stream::SplitStream;
 use rocket::http::Status;
 use rocket::local::blocking::Client;
 use rocket::serde::{Deserialize, Serialize};
+use crate::app;
 use crate::app::{ClientApp, ClientProperties};
 use crate::responses::{PrivateUserDataResponse, UserDataResponse};
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
@@ -73,7 +73,7 @@ pub async fn create_token(user_id: i64, app: ClientApp) -> Result<TokenProps, Se
         let props: TokenProps = TokenProps {
             token: AuthorizationToken {
                 _type: AuthorizationType::Bearer,
-                token: "Bearer".to_owned() + &nanoid!(),
+                token: app::generate_token(AuthorizationType::Bearer),
             },
             authorization: Authorization::User,
             associated_id: user_id,
