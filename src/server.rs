@@ -15,7 +15,7 @@ use crate::app::{AccessTokenResponse, ClientApp, ClientAuthorizationRequest, Cli
 
 use crate::database;
 use crate::database::delete_authorization_code;
-use crate::responses::{ClientAppResponse, DefaultGenericResponse, PrivateUserDataResponse, UserDataResponse};
+use crate::responses::{AppHandlerResponse, ClientAppResponse, DefaultGenericResponse, PrivateUserDataResponse, UserDataResponse};
 use crate::status::ServerStatus;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -162,7 +162,7 @@ pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<Ac
     if let Some(user_id) = database::verify_authorization(code).await {
         if let Some(app) = database::verify_client(body.client_id, body.client_secret.clone()).await {
             //TODO: Verify Bearer Token not app bot token
-            let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app.id, user_id).await;
+            let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app, user_id).await;
             return match token_result {
                 Ok(token) => {
                     delete_authorization_code(body.code.clone()).await;
@@ -175,6 +175,27 @@ pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<Ac
     }
 
     Err(Status::Unauthorized)
+}
+
+#[get("/oauth/app")]
+pub async fn app_handler(auth: TokenProps) -> Result<Json<AppHandlerResponse>> {
+    if auth.token._type != AuthorizationType::User {
+        return Err(Status::Unauthorized);
+    }
+
+    let mut apps: Vec<ClientProperties> = Vec::new();
+    apps.push(ClientProperties{
+        name: "Foo".to_string(),
+        scopes: 10
+    });
+    apps.push(ClientProperties{
+        name: "Bar".to_string(),
+        scopes: 20
+    });
+
+    return Ok(Json(AppHandlerResponse{
+        apps
+    }));
 }
 
 #[post("/oauth/authorize", format="json", data="<body>")]

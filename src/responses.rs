@@ -1,4 +1,5 @@
 use serde::{Serialize};
+use crate::app::ClientProperties;
 
 #[derive(Serialize)]
 pub struct DefaultGenericResponse {
@@ -30,4 +31,9 @@ pub struct ClientAppResponse {
     pub secret: String,
     pub token: String,
     pub scopes: i64
+}
+
+#[derive(Serialize)]
+pub struct AppHandlerResponse {
+    pub apps: Vec<ClientProperties>
 }

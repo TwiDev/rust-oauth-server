@@ -7,7 +7,6 @@ use mysql;
 use mysql::{Error, params, Params, Pool, PooledConn};
 use mysql::prelude::Queryable;
 use rocket::http::Status;
-use rocket::local::blocking::Client;
 use rocket::serde::{Deserialize, Serialize};
 use crate::app;
 use crate::app::{ClientApp, ClientProperties};
