@@ -8,6 +8,7 @@ use mysql::{Error, params, Params, Pool, PooledConn};
 use mysql::prelude::Queryable;
 use rocket::futures::stream::SplitStream;
 use rocket::http::Status;
+use rocket::local::blocking::Client;
 use rocket::serde::{Deserialize, Serialize};
 use crate::app::{ClientApp, ClientProperties};
 use crate::responses::{PrivateUserDataResponse, UserDataResponse};
@@ -39,13 +40,12 @@ pub struct UserData {
     pub power: i32,
 }
 
-pub async fn verify_token_by_index(client_id: u64, user_id: i64) -> Option<TokenProps> {
+pub async fn verify_token_by_index(app: ClientApp, user_id: i64) -> Result<TokenProps, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("SELECT accessToken,id,scopes,authorization_tye FROM tokens WHERE client_id = {} AND id = {} LIMIT 1", client_id, user_id);
+        let _query: String = format!("SELECT accessToken,id,scopes,authorization_tye FROM tokens WHERE client_id = {} AND id = {} LIMIT 1", app.id, user_id);
 
-        println!("{}", _query);
-        _conn.query_map::<(String, i64, i64, String), _, _, TokenProps>(_query, |(accessToken,id, scopes, authorization_tye)| {
+        let some_token: Option<TokenProps> = _conn.query_map::<(String, i64, i64, String), _, _, TokenProps>(_query, |(accessToken,id, scopes, authorization_tye)| {
             TokenProps {
                 token: AuthorizationToken{
                     _type: AuthorizationType::Bearer,
@@ -55,7 +55,44 @@ pub async fn verify_token_by_index(client_id: u64, user_id: i64) -> Option<Token
                 associated_id: id,
                 scopes,
             }
-        }).unwrap().pop()
+        }).unwrap().pop();
+
+        return if let Some(props) = some_token {
+            Ok(props)
+        } else {
+            create_token(user_id, app).await
+        }
+    }
+}
+
+pub async fn create_token(user_id: i64, app: ClientApp) -> Result<TokenProps, ServerStatus> {
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let p: &ClientApp = &app;
+
+        let props: TokenProps = TokenProps {
+            token: AuthorizationToken {
+                _type: AuthorizationType::Bearer,
+                token: "Bearer".to_owned() + &nanoid!(),
+            },
+            authorization: Authorization::User,
+            associated_id: user_id,
+            scopes: app.properties.scopes,
+        };
+
+        let _query: String = format!("INSERT INTO tokens (accessToken,id,scopes,authorization_tye,client_id) VALUES (:token,:id,:scopes,:authorization_tye,:client_id)");
+        return match _conn.exec_drop::<String, Params>(_query,
+                                                       params! {
+            "token" => props.token.token,
+            "id" => props.associated_id,
+            "scopes" =>  props.scopes,
+            "authorization_tye" => props.authorization.as_str().to_string(),
+            "client_id" => p.id
+            })
+        {
+            Ok(..) => Ok(*props),
+            Err(..) => Err(ServerStatus::BadRequest)
+        }
     }
 }
 
@@ -190,34 +227,15 @@ pub async fn delete_authorization_code(code: String) {
 pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("INSERT INTO tokens (accessToken,id,scopes,authorization_tye,client_id) VALUES (:token,:id,:scopes,:authorization_tye,:client_id)");
-        let p: &ClientApp = &app;
+        let code: String = nanoid!();
 
-        return match _conn.exec_drop::<String, Params>(_query,
-                                                       params! {
-            "token" => "Bearer".to_owned() + &nanoid!(),
-            "id" => user_id,
-            "scopes" =>  p.properties.scopes,
-            "authorization_tye" => AuthorizationType::User.as_str().to_string(),
-            "client_id" => app.id
-            }) {
-            Ok(..) => {
-                let code: String = nanoid!();
-
-                _conn.exec::<String, String, Params>("INSERT INTO authorization_code (id, associated_id) VALUES (:id,:associated_id)".to_string(), params! {
+        _conn.exec::<String, String, Params>("INSERT INTO authorization_code (id, associated_id) VALUES (:id,:associated_id)".to_string(), params! {
                     "id" => code.clone(),
+                    "associated_client" => app.id,
                     "associated_id" => user_id
                 }).expect("panic!");
 
-                Ok(code)
-            },
-            Err(err) =>  {
-                println!("{}", err);
-                Err(ServerStatus::BadRequest)
-            }
-        };
-
-
+        Ok(code)
     }
 }
 
@@ -286,8 +304,8 @@ pub async fn verify_authorization(code: String) -> Option<i64> {
     }
 }
 
-pub async fn verify_client_authorization(client_id: u64, user_id: i64) -> Result<TokenProps, ServerStatus> {
-    if let Some(token) = verify_token_by_index(client_id, user_id).await {
+pub async fn verify_client_authorization(client: ClientApp, user_id: i64) -> Result<TokenProps, ServerStatus> {
+    return if let Some(token) = verify_token_by_index(client, user_id).await {
         Ok(token)
     }else{
         Err(ServerStatus::TokenNotExist)
