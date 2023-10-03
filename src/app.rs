@@ -60,6 +60,11 @@ impl AccessTokenResponse {
     }
 
 }
+#[derive(Serialize, Deserialize)]
+pub struct AuthorizationCode {
+    pub id: i64,
+    pub scopes: i64
+}
 
 impl ClientApp {
 

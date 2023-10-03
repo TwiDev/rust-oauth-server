@@ -158,10 +158,10 @@ pub async fn signup_application() -> Result<Json<DefaultGenericResponse>,Status>
 pub async fn token_application(body: Json<ClientTokenRequest>) -> Result<Json<AccessTokenResponse>,Status> {
     let code: String = body.code.clone();
 
-    if let Some(user_id) = database::verify_authorization(code).await {
+    if let Some(code) = database::verify_authorization(code).await {
         if let Some(app) = database::verify_client(body.client_id, body.client_secret.clone()).await {
             //TODO: Verify Bearer Token not app bot token
-            let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app, user_id).await;
+            let token_result: Result<TokenProps, ServerStatus> = database::verify_client_authorization(app, code.id, code.scopes).await;
             return match token_result {
                 Ok(token) => {
                     delete_authorization_code(body.code.clone()).await;
@@ -198,7 +198,7 @@ pub async fn authorization_handler(auth: TokenProps, body: Json<ClientAuthorizat
     if let Some(app) = database::get_client(body.client_id).await {
         let user_id: i64 = auth.associated_id;
 
-        return match database::authorize_client(user_id, app).await {
+        return match database::authorize_client(user_id, app, body.scopes).await {
             Ok(code) => {
                 Ok(Json(DefaultGenericResponse {
                     code: 0,

@@ -9,7 +9,7 @@ use rocket::http::Status;
 use rocket::serde::{Deserialize, Serialize};
 
 use crate::app;
-use crate::app::{ClientApp, ClientProperties};
+use crate::app::{AuthorizationCode, ClientApp, ClientProperties};
 use crate::responses::{PrivateUserDataResponse, UserDataResponse};
 use crate::server::{Authorization, AuthorizationToken, AuthorizationType, TokenProps};
 use crate::status::ServerStatus;
@@ -39,10 +39,10 @@ pub struct UserData {
     pub power: i32,
 }
 
-pub async fn verify_token_by_index(app: ClientApp, user_id: i64) -> Result<TokenProps, ServerStatus> {
+pub async fn verify_token_by_index(app: ClientApp, user_id: i64, scopes: i64) -> Result<TokenProps, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("SELECT accessToken,id,scopes,authorization_tye FROM tokens WHERE client_id = {} AND id = {} LIMIT 1", app.id, user_id);
+        let _query: String = format!("SELECT accessToken,id,scopes,authorization_tye FROM tokens WHERE client_id = {} AND id = {} AND scopes = {} LIMIT 1", app.id, user_id, scopes);
 
         let some_token: Option<TokenProps> = _conn.query_map::<(String, i64, i64, String), _, _, TokenProps>(_query, |(accessToken,id, scopes, authorization_tye)| {
             TokenProps {
@@ -59,12 +59,12 @@ pub async fn verify_token_by_index(app: ClientApp, user_id: i64) -> Result<Token
         return if let Some(props) = some_token {
             Ok(props)
         } else {
-            create_token(user_id, app).await
+            create_token(user_id, app, scopes).await
         }
     }
 }
 
-pub async fn create_token(user_id: i64, app: ClientApp) -> Result<TokenProps, ServerStatus> {
+pub async fn create_token(user_id: i64, app: ClientApp, scopes:i64) -> Result<TokenProps, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
         let p: &ClientApp = &app;
@@ -76,7 +76,7 @@ pub async fn create_token(user_id: i64, app: ClientApp) -> Result<TokenProps, Se
                                                        params! {
             "token" => token.clone(),
             "id" => user_id,
-            "scopes" =>  p.properties.scopes,
+            "scopes" =>  scopes,
             "authorization_tye" => "User",
             "client_id" => p.id
             })
@@ -225,14 +225,14 @@ pub async fn delete_authorization_code(code: String) {
     }
 }
 
-pub async fn authorize_client(user_id: i64, app: ClientApp) -> Result<String, ServerStatus> {
+pub async fn authorize_client(user_id: i64, app: ClientApp, scopes: i64) -> Result<String, ServerStatus> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
         let code: String = nanoid!();
 
-        _conn.exec::<String, String, Params>("INSERT INTO authorization_code (id, associated_id) VALUES (:id,:associated_id)".to_string(), params! {
+        _conn.exec::<String, String, Params>("INSERT INTO authorization_code (id, associated_id, scopes) VALUES (:id,:associated_id,:scopes)".to_string(), params! {
                     "id" => code.clone(),
-                    "associated_client" => app.id,
+                    "scopes" => scopes,
                     "associated_id" => user_id
                 }).expect("panic!");
 
@@ -294,40 +294,54 @@ pub async fn get_client(id: u64) -> Option<ClientApp> {
     }
 }
 
-pub async fn verify_authorization(code: String) -> Option<i64> {
+pub async fn verify_authorization(code: String) -> Option<AuthorizationCode> {
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("SELECT associated_id FROM authorization_code WHERE id = {:?}", code);
+        let _query: String = format!("SELECT associated_id,scopes FROM authorization_code WHERE id = {:?}", code);
 
-        _conn.query_map(_query, |(associated_id)| {
-            associated_id
+        _conn.query_map(_query, |(associated_id,scopes)| {
+            AuthorizationCode{
+                id: associated_id,
+                scopes
+            }
         }).unwrap().pop()
     }
 }
 
-pub async fn verify_client_authorization(client: ClientApp, user_id: i64) -> Result<TokenProps, ServerStatus> {
-    return verify_token_by_index(client, user_id).await
+pub async fn verify_client_authorization(client: ClientApp, user_id: i64, scopes: i64) -> Result<TokenProps, ServerStatus> {
+    return verify_token_by_index(client, user_id, scopes).await
 }
 
 pub async fn get_authorized_apps(user_id: i64) -> Vec<ClientProperties> {
     let mut clients: Vec<ClientProperties> = Vec::new();
     unsafe {
         let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
-        let _query: String = format!("SELECT client_id FROM tokens WHERE id = {:?}", user_id);
+        let _query: String = format!("SELECT client_id,scopes FROM tokens WHERE id = {:?}", user_id);
 
-        let mut ids: Vec<u64> = Vec::new();
-        _conn.query_map(_query, |(client_id)| {
-            ids.push(client_id)
+        let mut ids: Vec<AuthorizedClient> = Vec::new();
+        _conn.query_map(_query, |(client_id, scopes)| {
+            ids.push(AuthorizedClient{
+                scopes,
+                client_id
+            })
         }).unwrap().pop();
 
         for id in ids {
-            if let Some(app) = get_client(id).await {
-                clients.push(app.properties)
+            if let Some(app) = get_client(id.client_id).await {
+                clients.push(ClientProperties{
+                    scopes:id.scopes,
+                    name: app.properties.name
+                })
             }
         }
     }
 
     clients
+}
+
+pub struct AuthorizedClient {
+    pub client_id: u64,
+    pub scopes: i64
 }
 
 pub unsafe fn initialize() {
