@@ -182,15 +182,7 @@ pub async fn app_handler(auth: TokenProps) -> Result<Json<AppHandlerResponse>, S
         return Err(Status::Unauthorized)
     }
 
-    let mut apps: Vec<ClientProperties> = Vec::new();
-    apps.push(ClientProperties{
-        name: "Foo".to_string(),
-        scopes: 10
-    });
-    apps.push(ClientProperties{
-        name: "Bar".to_string(),
-        scopes: 20
-    });
+    let mut apps: Vec<ClientProperties> = database::get_authorized_apps(auth.associated_id).await;
 
     return Ok(Json(AppHandlerResponse{
         apps

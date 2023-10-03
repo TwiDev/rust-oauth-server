@@ -309,6 +309,27 @@ pub async fn verify_client_authorization(client: ClientApp, user_id: i64) -> Res
     return verify_token_by_index(client, user_id).await
 }
 
+pub async fn get_authorized_apps(user_id: i64) -> Vec<ClientProperties> {
+    let mut clients: Vec<ClientProperties> = Vec::new();
+    unsafe {
+        let mut _conn: PooledConn = DATABASE_CLIENT.database_conn().await;
+        let _query: String = format!("SELECT client_id FROM tokens WHERE id = {:?}", user_id);
+
+        let mut ids: Vec<u64> = Vec::new();
+        _conn.query_map(_query, |(client_id)| {
+            ids.push(client_id)
+        }).unwrap().pop();
+
+        for id in ids {
+            if let Some(app) = get_client(id).await {
+                clients.push(app.properties)
+            }
+        }
+    }
+
+    clients
+}
+
 pub unsafe fn initialize() {
     DB_POOL.set(Pool::new(URL).unwrap()).unwrap();
 }

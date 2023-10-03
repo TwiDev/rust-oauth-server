@@ -1,6 +1,4 @@
 use rocket::{catchers, launch, routes};
-use rocket::serde::json::Json;
-use crate::app::ClientAuthorizationRequest;
 
 mod server;
 mod responses;
